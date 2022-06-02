@@ -1,14 +1,19 @@
 from typing import Callable
+from typing import List
 
 import numpy as np
 import pandas as pd  # type: ignore
 import plotly.express as px  # type: ignore
 import streamlit as st
+from sklearn.base import BaseEstimator  # type: ignore
+from sklearn.linear_model import LogisticRegression  # type: ignore
 
 L1 = "L1"
 L2 = "L2"
+MODEL_PARAM_MAP = {L1: "l1", L2: "l2"}
 
 
+# TODO: type hints! also, this can't be modelled with Logistic Regression
 def true_func(x):
     y = (x**2).sum(1) ** 0.5 < 0.8
     return y.astype(int)
@@ -72,9 +77,22 @@ class DataCreator:
         return df
 
 
-class Model:
-    def fit(self):
-        print("You fit me!")
+class Trainer:
+    def __init__(
+        self,
+        model: BaseEstimator,
+        data: pd.DataFrame,
+        dv: str = "y",
+    ) -> None:
+        self.X = data[[col for col in data if col != dv]]
+        self.y = data[dv]
+        self.model = model
+
+    def train(self) -> None:
+        self.model.fit(self.X, self.y)
+
+    def predict(self, x: pd.DataFrame) -> List[int]:
+        return self.model.predict(x).tolist()
 
 
 class App:
@@ -84,9 +102,37 @@ class App:
 
         # Create data
         data = DataCreator.create_data(2, 2, 0, true_func)
-        st.write(data)
 
-        # Preview data
+        # Select Regularisation Option
+        reg_type = st.selectbox("Choose a regularisation type", (L1, L2))
+
+        # Select Regularisation Strength and other things as appropriate
+        st.write("TODO: Select regularisation strength, other parameters?")
+
+        trainer = Trainer(
+            LogisticRegression(
+                penalty=MODEL_PARAM_MAP[reg_type],
+                solver="liblinear",
+            ),
+            data,
+        )
+
+        # Action button
+        model_trained = st.button("Fit model")
+
+        if model_trained:
+            with st.spinner("Training model..."):
+                trainer.train()
+                preds = trainer.predict(data.drop("y", axis=1))
+
+            # See resulting predictions and feature weights
+            #st.write("Predictions")
+            #st.write(preds)
+            st.write("Coefficients")
+            st.write(trainer.model.coef_)
+
+        # View data
+        # TODO: overlay with a heatmap showing the decisions the model would have made, once the model's trained
         fig = px.scatter(
             data.assign(y=data["y"].astype(str)),
             "x_useful_0",
@@ -94,18 +140,6 @@ class App:
             color="y",
         )
         st.plotly_chart(fig)
-
-        # Select Regularisation Option
-        st.selectbox("Choose a regularisation type", (L1, L2))
-
-        # Select Regularisation Strength and other things as appropriate
-        st.write("TODO: Select regularisation strength, other parameters?")
-
-        model = Model()
-        # Action button
-        st.button("Fit model", on_click=model.fit)
-        # See resulting predictions and feature weights
-        st.write("TODO: See resulting predictions and feature weights")
 
 
 if __name__ == "__main__":

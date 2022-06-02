@@ -1,4 +1,8 @@
+import pandas as pd  # type: ignore
+from sklearn.linear_model import LogisticRegression  # type: ignore
+
 from app.app import DataCreator  # type: ignore
+from app.app import Trainer  # type: ignore
 
 
 def test_create_data_dtypes():
@@ -33,3 +37,18 @@ def test_create_data_roughly_balanced_classes():
     df = DataCreator().create_data(2, 2, 0.5)
 
     assert df["y"].value_counts(normalize=True).max() < 0.6
+
+
+def test_trainer():
+    df = pd.DataFrame(
+        {
+            "A": [1, 2, 3, 4],
+            "B": [10, 5, 1, 0],
+        }
+    )
+    df["y"] = (df["A"] < df["B"]).astype(int)
+    trainer = Trainer(LogisticRegression(), df, dv="y")
+    trainer.train()
+    preds = trainer.predict(df[["A", "B"]])
+    assert preds == [1, 1, 0, 0]
+    assert hasattr(trainer.model, "coef_")
