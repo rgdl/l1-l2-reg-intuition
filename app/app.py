@@ -11,15 +11,22 @@ from sklearn.linear_model import LogisticRegression  # type: ignore
 L1 = "L1"
 L2 = "L2"
 MODEL_PARAM_MAP = {L1: "l1", L2: "l2"}
+N_USEFUL_FEATURES = 2
+
+DV = "y"
 
 
-# TODO: type hints! also, this can't be modelled with Logistic Regression
-def true_func(x):
-    y = (x**2).sum(1) ** 0.5 < 0.8
+def true_func(x: np.ndarray) -> np.ndarray:
+    """
+    This cuts a diagonal line through feature space
+    Built on the assumption that there are 2 useful features
+    """
+    y = x.sum(axis=1) > sum(DataCreator.IV_RANGE)
     return y.astype(int)
 
 
 # TODO: replace this class with a function if it only has one method
+# TODO: is it recalculating more frequently than it needs to?
 class DataCreator:
     """
     We want a dataset which is:
@@ -38,18 +45,18 @@ class DataCreator:
     @classmethod
     def create_data(
         cls,
-        n_useful_features: int,
         n_noise_features: int,
         noise_amount: float,
         function: Callable[[np.ndarray], np.ndarray] = true_func,
     ) -> pd.DataFrame:
+        np.random.seed(777)
 
         if not (0 <= noise_amount <= 1):
             raise ValueError
 
         useful_features = np.random.uniform(
             *cls.IV_RANGE,
-            size=(cls.N_SAMPLES, n_useful_features),
+            size=(cls.N_SAMPLES, N_USEFUL_FEATURES),
         )
         labels = function(useful_features).reshape(-1, 1)
 
@@ -57,7 +64,7 @@ class DataCreator:
         useful_features += np.random.uniform(
             -noise_amount,
             noise_amount,
-            size=(cls.N_SAMPLES, n_useful_features),
+            size=(cls.N_SAMPLES, N_USEFUL_FEATURES),
         )
         useful_features = useful_features.clip(*cls.IV_RANGE)
 
@@ -69,7 +76,7 @@ class DataCreator:
         df = pd.DataFrame(
             np.concatenate((useful_features, noise_features), axis=1),
             columns=(
-                *(f"x_useful_{i}" for i in range(n_useful_features)),
+                *(f"x_useful_{i}" for i in range(N_USEFUL_FEATURES)),
                 *(f"x_noise_{i}" for i in range(n_noise_features)),
             ),
         ).assign(y=labels)
@@ -82,10 +89,9 @@ class Trainer:
         self,
         model: BaseEstimator,
         data: pd.DataFrame,
-        dv: str = "y",
     ) -> None:
-        self.X = data[[col for col in data if col != dv]]
-        self.y = data[dv]
+        self.X = data[[col for col in data if col != DV]]
+        self.y = data[DV]
         self.model = model
 
     def train(self) -> None:
@@ -95,13 +101,19 @@ class Trainer:
         return self.model.predict(x).tolist()
 
 
+def get_model_coefficients_df(
+    model: BaseEstimator, data: pd.DataFrame
+) -> pd.DataFrame:
+    return pd.DataFrame(model.coef_, columns=data.drop(DV, axis=1).columns)
+
+
 class App:
     @staticmethod
     def main() -> None:
         st.header("L1 vs. L2 Regularisation Intuition")
 
         # Create data
-        data = DataCreator.create_data(2, 2, 0, true_func)
+        data = DataCreator.create_data(2, 0.5, true_func)
 
         # Select Regularisation Option
         reg_type = st.selectbox("Choose a regularisation type", (L1, L2))
@@ -123,21 +135,19 @@ class App:
         if model_trained:
             with st.spinner("Training model..."):
                 trainer.train()
-                preds = trainer.predict(data.drop("y", axis=1))
+                preds = trainer.predict(data.drop(DV, axis=1))
 
             # See resulting predictions and feature weights
-            #st.write("Predictions")
-            #st.write(preds)
             st.write("Coefficients")
-            st.write(trainer.model.coef_)
+            st.write(get_model_coefficients_df(trainer.model, data))
 
         # View data
-        # TODO: overlay with a heatmap showing the decisions the model would have made, once the model's trained
+        # TODO: overlay with a heatmap showing the decisions the model would have made, once the model's trained - may require a move away from plotly.express
         fig = px.scatter(
-            data.assign(y=data["y"].astype(str)),
+            data.assign(y=data[DV].astype(str)),
             "x_useful_0",
             "x_useful_1",
-            color="y",
+            color=DV,
         )
         st.plotly_chart(fig)
 
