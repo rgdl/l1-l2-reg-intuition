@@ -1,11 +1,13 @@
 name := l1-l2-reg-intuition
 
-tests:
-	coverage run -m pytest test/test.py
-	coverage report
+build_base:
+	docker build . -f base.Dockerfile -t ${name}-base
 
-build:
-	docker build . -t ${name}
+test: build_base
+	docker build . -f test.Dockerfile -t ${name}-test
+	docker run --rm -it ${name}-test
+	docker image rm ${name}-test
 
-run:
-	docker run -p 8501:8501 ${name}
+build: build_base
+	docker build . -f main.Dockerfile -t ${name}
+	docker run --rm -p 8501:8501 ${name}
