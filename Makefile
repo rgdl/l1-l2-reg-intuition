@@ -9,4 +9,4 @@ test: build_base
 
 build: build_base
 	docker build . -f docker/main.Dockerfile -t ${name}
-	docker run --rm -p 8501:8501 ${name}
+	docker run --rm -it -p 8501:8501 ${name}

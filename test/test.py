@@ -1,10 +1,11 @@
+import numpy as np
 import pandas as pd  # type: ignore
 from sklearn.linear_model import LogisticRegression  # type: ignore
 
-from app.app import DV  # type: ignore
-from app.app import DataCreator  # type: ignore
-from app.app import Trainer  # type: ignore
-from app.app import get_model_coefficients_df  # type: ignore
+from app.app import DV
+from app.app import DataCreator
+from app.app import Trainer
+from app.app import get_model_coefficients_df
 
 
 def test_create_data_dtypes():
@@ -69,3 +70,25 @@ def test_get_model_coefficients_df():
     coefs = get_model_coefficients_df(model, df)
     assert list(coefs.columns) == ["A", "B"]
     assert len(coefs) == 1
+
+
+def test_get_heatmap():
+    """
+    Create a space with a very obvious boundary
+    """
+    df = pd.DataFrame(
+        {
+            "A": [0 for _ in range(20)],
+            "B": range(20),
+        }
+    )
+    df[DV] = (df["B"] > 10).astype(int)
+    model = LogisticRegression()
+    trainer = Trainer(model, df)
+    trainer.train()
+    heatmap = trainer.get_heatmap(
+        {"A": np.linspace(0, 20, 10), "B": np.linspace(0, 2, 5)}
+    )
+    assert heatmap.shape == (50, 3)
+    assert all(heatmap.loc[heatmap["B"] < 5, DV] == 0)
+    assert all(heatmap.loc[heatmap["B"] > 15, DV] == 1)
